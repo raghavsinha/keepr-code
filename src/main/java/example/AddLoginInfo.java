@@ -10,44 +10,42 @@ import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
 import com.google.gson.*;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestStreamHandler;
+import org.json.JSONObject;
 
 import java.io.*;
 import java.util.Calendar;
 
 public class AddLoginInfo implements RequestStreamHandler {
-    private String TABLE_NAME = "";
-    private DynamoDB database;
+    private String TABLE_NAME = "StoreLoginInfo-Table-StreamHandler";
     private String message = "Post Successful!";
 
     @Override
     public void handleRequest(InputStream inputStream, OutputStream outputStream, Context context) throws IOException {
-        ObjectOutputStream oos = new ObjectOutputStream(outputStream);
+        DynamoDB database = new DynamoDB(AmazonDynamoDBClientBuilder.defaultClient());
+        OutputStreamWriter ows = new OutputStreamWriter(outputStream);
+        JSONObject response = new JSONObject();
+
         try {
-            JsonObject jo = getJsonFromInputStream(inputStream);
-            initDB(); //initializes dynamodb client
-            putData(jo); //puts json data from input stream into db
+            putData(getJsonFromInputStream(inputStream), database);
         } catch(Exception e) {
-            message = "Post Failed. Internal Server Error.";
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            message = "Post Failed. Internal Server Error.           " + sw.toString();
         }
-        JsonObject jsonMessage = new Gson().fromJson("{" + "\"message\":" + message + "}", JsonObject.class);
-        oos.writeObject(jsonMessage);
+
+        response.put("message", message);
+        ows.write(response.toString());
+        ows.close();
     }
 
-    private PutItemOutcome putData(JsonObject data) throws ConditionalCheckFailedException {
-        Item newItem = new Item().withString("username", data.get("username").getAsString()).withString("password", data.get("password").getAsString()).withString("date", Calendar.getInstance().getTime().toString());
-        PutItemSpec pIS = new PutItemSpec().withItem(newItem);
-        return this.database.getTable(TABLE_NAME).putItem(pIS);
-    }
+    private PutItemOutcome putData(JsonObject data, DynamoDB database) throws ConditionalCheckFailedException {
+        String username = data.get("username").getAsString();
+        String password = data.get("password").getAsString();
+        message += "     username: " + username + " password: " + password + " >> Data Accepted. ";
 
-    private boolean initDB(){
-        boolean noProblems = true;
-        try {
-            AmazonDynamoDB client = AmazonDynamoDBClientBuilder.defaultClient();
-            this.database = new DynamoDB(client);
-        } catch(Exception e){
-            noProblems = false;
-        }
-        return noProblems;
+        Item newItem = new Item().withString("username", username).withString("password", password);
+        PutItemOutcome pio = database.getTable(TABLE_NAME).putItem(new PutItemSpec().withItem(newItem));
+        return pio;
     }
 
     private JsonObject getJsonFromInputStream(InputStream is){
@@ -60,26 +58,6 @@ public class AddLoginInfo implements RequestStreamHandler {
             }
             br.close();
             jo = new Gson().fromJson(jsonString, JsonObject.class);
-        } catch(Exception e) {
-            e.printStackTrace();
-        }
-        return jo;
-    }
-
-    public static JsonObject getJson(File f){
-        JsonObject jo = null;
-        try {
-            BufferedReader br = new BufferedReader(new FileReader(f));
-            String jsonString = "";
-            while(br.ready()){
-                jsonString += br.readLine() + "\n";
-            }
-            br.close();
-
-            System.out.println(jsonString);
-            jo = new Gson().fromJson(jsonString, JsonObject.class);
-            //JsonElement je = JsonParser.parseString(jsonString);
-            //jo = je.getAsJsonObject();
         } catch(Exception e) {
             e.printStackTrace();
         }
@@ -129,3 +107,25 @@ public class AddLoginInfo implements RequestStreamHandler {
         return noProblems;
     }
 }*/
+
+/*
+public static JsonObject getJson(File f){
+    JsonObject jo = null;
+    try {
+        BufferedReader br = new BufferedReader(new FileReader(f));
+        String jsonString = "";
+        while(br.ready()){
+            jsonString += br.readLine() + "\n";
+        }
+        br.close();
+
+        System.out.println(jsonString);
+        jo = new Gson().fromJson(jsonString, JsonObject.class);
+        //JsonElement je = JsonParser.parseString(jsonString);
+        //jo = je.getAsJsonObject();
+    } catch(Exception e) {
+        e.printStackTrace();
+    }
+    return jo;
+}
+ */
